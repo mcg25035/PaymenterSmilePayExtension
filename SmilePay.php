@@ -4,15 +4,17 @@ namespace App\Extensions\Gateways\SmilePay;
 
 use App\Classes\Extensions\Gateway;
 use App\Helpers\ExtensionHelper;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 
 class SmilePay extends Gateway
 {
     /**
-    * Get the extension metadata
-    * 
-    * @return array
-    */
+     * Get the extension metadata
+     * 
+     * @return array
+     */
     public function getMetadata()
     {
         return [
@@ -36,10 +38,17 @@ class SmilePay extends Gateway
                 'type' => 'text',
                 'friendlyName' => 'Api Key',
                 'required' => true,
-            ]
+            ],
+            [
+                'name' => 'smilepay-adapter-api-addr',
+                'type' => 'text',
+                'friendlyName' => 'SmilePay Adapter API Address',
+                'required' => true,
+                'description' => 'The API address for the SmilePay adapter.',
+            ],
         ];
     }
-    
+
     /**
      * Get the URL to redirect to
      * 
@@ -50,7 +59,29 @@ class SmilePay extends Gateway
      */
     public function pay($total, $products, $invoiceId)
     {
-        return [];
+        $apiAddress = ExtensionHelper::getConfig('SmilePay', 'smilepay-adapter-api-addr');
+        $customerEmail = auth()->user()->email;
+        $customerName = auth()->user()->last_name . auth()->user()->first_name;
+
+        
+        $payload = [
+            'total' => $total,
+            'products' => $products,
+            'invoice_id' => $invoiceId,
+            'email' => $customerEmail,
+            'name' => $customerName
+        ];
+
+        $response = Http::withHeaders(['Content-Type' => 'application/json'])
+            ->withBody(json_encode($payload), 'application/json')
+            ->post($apiAddress."/pay");
+
+        Log::info('SmilePay pay: 成功發送付款請求到 SmilePay Adapter API.', [
+            'invoice_id' => $invoiceId,
+            'response' => $response->body(),
+        ]);
+
+        return $response->json()['paymentLink'];
     }
 
     public function webhook(Request $request)
